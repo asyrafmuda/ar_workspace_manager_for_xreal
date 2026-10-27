@@ -5,7 +5,13 @@ let jsonCInclude = "/opt/homebrew/opt/json-c/include/json-c"
 // VLCKit binary framework (LGPL, fetched by Scripts/fetch-vlckit.sh — not in git). Its libvlc C API
 // headers ship inside the framework but are excluded from its module map, so the CVLCKit shim target
 // re-exposes them to Swift via this search path.
-let vlcHeaders = "vendor/VLCKit/VLCKit.xcframework/macos-arm64_x86_64/VLCKit.framework/Headers"
+// Absolute paths: the default "swiftbuild" build system (Swift 6.x) runs the compilers from outside the
+// package directory, so relative -I/-L flags no longer resolve.
+let vlcHeaders = "\(Context.packageDirectory)/vendor/VLCKit/VLCKit.xcframework/macos-arm64_x86_64/VLCKit.framework/Headers"
+let vendorLib = "\(Context.packageDirectory)/vendor/lib"
+// Every Swift target that (transitively) imports CapturePipeline needs the libvlc headers to rebuild the
+// CVLCKit clang module under swiftbuild.
+let vlcSwiftSettings: [SwiftSetting] = [.unsafeFlags(["-Xcc", "-I\(vlcHeaders)"])]
 
 let package = Package(
     name: "VRDesktop",
@@ -27,7 +33,7 @@ let package = Package(
                 .linkedFramework("IOKit"),
                 .linkedFramework("CoreFoundation"),
                 .linkedFramework("AppKit"),
-                .unsafeFlags(["-L", "vendor/lib", "-ljson-c"]),
+                .unsafeFlags(["-L", vendorLib, "-ljson-c"]),
             ]
         ),
         .target(name: "GlassesDriver", dependencies: ["CXrealDriver"]),
@@ -42,7 +48,7 @@ let package = Package(
         .target(
             name: "CapturePipeline",
             dependencies: ["CVLCKit", "VLCKit"],
-            swiftSettings: [.unsafeFlags(["-Xcc", "-I\(vlcHeaders)"])]
+            swiftSettings: vlcSwiftSettings
         ),
         .target(
             name: "CPrivateDisplay",
@@ -50,7 +56,8 @@ let package = Package(
             linkerSettings: [.linkedFramework("CoreGraphics")]
         ),
         .target(name: "DisplayManager", dependencies: ["CPrivateDisplay"]),
-        .target(name: "Compositor", dependencies: ["GlassesDriver", "CapturePipeline"]),
+        .target(name: "Compositor", dependencies: ["GlassesDriver", "CapturePipeline"],
+                swiftSettings: vlcSwiftSettings),
         // Re-declares NSXPCConnection.auditToken (header-only) so the helper can identify clients.
         .target(name: "CXPCAuditToken"),
         // XPC protocol + constants shared by the app and the privileged helper daemon.
@@ -65,7 +72,8 @@ let package = Package(
         .executableTarget(
             name: "VRDesktop",
             dependencies: ["GlassesDriver", "CapturePipeline", "Compositor", "DisplayManager",
-                           "PrivilegedHelperShared", "CPrivateDisplay"]
+                           "PrivilegedHelperShared", "CPrivateDisplay"],
+            swiftSettings: vlcSwiftSettings
         ),
     ]
 )

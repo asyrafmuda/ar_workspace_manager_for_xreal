@@ -36,6 +36,9 @@ mkdir -p "$DEST"
 cp -R "$SRC/VLCKit.xcframework" "$DEST/"
 cp "$SRC/COPYING.txt" "$DEST/"                 # LGPL 2.1 text (shipped with the app)
 rm -rf "$DEST/VLCKit.xcframework/macos-arm64_x86_64/dSYMs"   # 300+ MB of debug symbols
+# Newer SwiftPM (Swift 6.x) fails the build if the xcframework's DebugSymbolsPath is missing, so leave
+# an empty folder in its place.
+mkdir -p "$DEST/VLCKit.xcframework/macos-arm64_x86_64/dSYMs"
 
 echo "==> installed $DEST/VLCKit.xcframework"
 echo "    archs: $(lipo -archs "$DEST/VLCKit.xcframework/macos-arm64_x86_64/VLCKit.framework/VLCKit")"
